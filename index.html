@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wasteland Convoy: Text Adventure</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #111;
+            color: #0f0;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        #game-container {
+            border: 2px solid #333;
+            padding: 20px;
+            background-color: #000;
+            border-radius: 10px;
+        }
+        
+        #game-output {
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #333;
+            background-color: #0a0a0a;
+        }
+        
+        #player-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #333;
+            background-color: #111;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 10px;
+        }
+        
+        button {
+            background-color: #222;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        
+        button:hover {
+            background-color: #0f0;
+            color: #000;
+        }
+        
+        .section {
+            margin-bottom: 20px;
+        }
+        
+        h1, h2 {
+            color: #0f0;
+            text-align: center;
+        }
+        
+        #stats-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            border: 1px solid #333;
+            padding: 10px;
+            background-color: #0a0a0a;
+            width: 30%;
+        }
+        
+        .health-bar {
+            height: 20px;
+            background-color: #111;
+            border: 1px solid #333;
+            margin-top: 5px;
+        }
+        
+        .health-fill {
+            height: 100%;
+            background-color: #0f0;
+            width: 100%;
+            transition: width 0.3s;
+        }
+        
+        .vehicle-health-fill {
+            background-color: #00f;
+        }
+        
+        .ammo-count {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        #action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>WASTELAND CONVOY</h1>
+    <h2>Text Adventure Prototype</h2>
+    
+    <div id="game-container">
+        <div id="stats-container">
+            <div class="stat-box">
+                <div>HEALTH: <span id="health-value">100</span>%</div>
+                <div class="health-bar">
+                    <div class="health-fill" id="health-bar"></div>
+                </div>
+            </div>
+            <div class="stat-box">
+                <div>VEHICLE: <span id="vehicle-value">80</span>%</div>
+                <div class="health-bar">
+                    <div class="health-fill vehicle-health-fill" id="vehicle-bar"></div>
+                </div>
+            </div>
+            <div class="stat-box">
+                <div>AMMO:</div>
+                <div class="ammo-count"><span id="ammo-value">12</span></div>
+            </div>
+        </div>
+        
+        <div id="game-output">
+            <p>Welcome to Wasteland Convoy!</p>
+            <p>It's been five years since the viral outbreak. You are one of the few immune survivors.</p>
+            <p>You're currently in your reinforced sedan on the outskirts of what used to be Denver.</p>
+            <p>Your mission: Reach the survivor settlement in Boulder, 30 miles away.</p>
+            <p>Type 'help' for commands or click the buttons below. Good luck!</p>
+        </div>
+        
+        <input type="text" id="player-input" placeholder="Enter your command...">
+        
+        <div id="action-buttons">
+            <button onclick="processCommand('drive')">DRIVE</button>
+            <button onclick="processCommand('look')">LOOK AROUND</button>
+            <button onclick="processCommand('shoot')">SHOOT</button>
+            <button onclick="processCommand('search')">SEARCH</button>
+            <button onclick="processCommand('repair')">REPAIR</button>
+            <button onclick="processCommand('inventory')">INVENTORY</button>
+            <button onclick="processCommand('help')">HELP</button>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        const gameState = {
+            health: 100,
+            vehicleHealth: 80,
+            ammo: 12,
+            fuel: 65,
+            distance: 30,
+            currentLocation: "highway",
+            zombiesNearby: 0,
+            inventory: ["handgun", "first aid kit", "basic tools", "water bottle"],
+            driving: false,
+            repairing: false,
+            events: [
+                "You spot a gas station ahead. It might have supplies.",
+                "The road is blocked by abandoned cars. You'll need to find a way around.",
+                "A small group of zombies is feeding on something in the distance.",
+                "You hear a distress call on the radio. Someone needs help nearby.",
+                "Your engine makes a concerning noise. It might need attention soon.",
+                "There's a military checkpoint ahead. It could have weapons.",
+                "A severe storm is approaching. Visibility will be reduced.",
+                "You see what looks like a safe house in the distance."
+            ],
+            zombieTypes: [
+                "runner", "runner", "runner", 
+                "brute", 
+                "spitter", "spitter",
+                "howler"
+            ],
+            locations: ["highway", "suburb", "gas station", "forest", "abandoned mall", "tunnel", "military outpost"],
+            commands: {
+                "drive": "Continue driving toward your destination",
+                "look": "Look around your current location",
+                "shoot": "Fire your weapon at zombies (uses ammo)",
+                "search": "Search the area for supplies",
+                "repair": "Attempt to repair your vehicle",
+                "inventory": "Check your inventory",
+                "help": "Display this help message"
+            }
+        };
+        
+        // DOM elements
+        const outputElement = document.getElementById("game-output");
+        const inputElement = document.getElementById("player-input");
+        const healthValue = document.getElementById("health-value");
+        const healthBar = document.getElementById("health-bar");
+        const vehicleValue = document.getElementById("vehicle-value");
+        const vehicleBar = document.getElementById("vehicle-bar");
+        const ammoValue = document.getElementById("ammo-value");
+        
+        // Function to update the game output
+        function updateOutput(text) {
+            outputElement.innerHTML += `<p>${text}</p>`;
+            outputElement.scrollTop = outputElement.scrollHeight;
+        }
+        
+        // Function to update stats display
+        function updateStats() {
+            healthValue.textContent = gameState.health;
+            healthBar.style.width = `${gameState.health}%`;
+            vehicleValue.textContent = gameState.vehicleHealth;
+            vehicleBar.style.width = `${gameState.vehicleHealth}%`;
+            ammoValue.textContent = gameState.ammo;
+            
+            // Change health bar color based on value
+            if (gameState.health < 25) {
+                healthBar.style.backgroundColor = "#f00";
+            } else if (gameState.health < 50) {
+                healthBar.style.backgroundColor = "#ff0";
+            } else {
+                healthBar.style.backgroundColor = "#0f0";
+            }
+            
+            // Change vehicle health bar color based on value
+            if (gameState.vehicleHealth < 25) {
+                vehicleBar.style.backgroundColor = "#f00";
+            } else if (gameState.vehicleHealth < 50) {
+                vehicleBar.style.backgroundColor = "#ff0";
+            } else {
+                vehicleBar.style.backgroundColor = "#00f";
+            }
+        }
+        
+        // Check if game is over
+        function checkGameState() {
+            if (gameState.health <= 0) {
+                updateOutput("YOU DIED! The zombie horde has overwhelmed you. Game over.");
+                disableInput();
+                return false;
+            }
+            
+            if (gameState.vehicleHealth <= 0) {
+                updateOutput("Your vehicle has been destroyed! Without transportation, your journey ends here. Game over.");
+                disableInput();
+                return false;
+            }
+            
+            if (gameState.distance <= 0) {
+                updateOutput("CONGRATULATIONS! You've reached the Boulder settlement safely. You win!");
+                disableInput();
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // Disable input after game over
+        function disableInput() {
+            inputElement.disabled = true;
+            const buttons = document.querySelectorAll("#action-buttons button");
+            buttons.forEach(button => button.disabled = true);
+        }
+        
+        // Get a random integer between min and max (inclusive)
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+        
+        // Get a random element from an array
+        function getRandomElement(array) {
+            return array[Math.floor(Math.random() * array.length)];
+        }
+        
+        // Process player commands
+        function processCommand(command) {
+            updateOutput(`> ${command}`);
+            
+            switch(command.toLowerCase()) {
+                case "drive":
+                    drivingAction();
+                    break;
+                case "look":
+                    lookAction();
+                    break;
+                case "shoot":
+                    shootAction();
+                    break;
+                case "search":
+                    searchAction();
+                    break;
+                case "repair":
+                    repairAction();
+                    break;
+                case "inventory":
+                    inventoryAction();
+                    break;
+                case "help":
+                    helpAction();
+                    break;
+                default:
+                    updateOutput("Unknown command. Type 'help' for a list of commands.");
+            }
+            
+            // Generate random events occasionally
+            if (Math.random() < 0.3 && command !== "help" && command !== "inventory") {
+                generateRandomEvent();
+            }
+            
+            updateStats();
+            checkGameState();
+        }
+        
+        // Command actions
+        function drivingAction() {
+            if (gameState.zombiesNearby > 0) {
+                updateOutput("You can't drive safely with zombies surrounding your vehicle!");
+                return;
+            }
+            
+            const distanceCovered = getRandomInt(1, 3);
+            gameState.distance -= distanceCovered;
+            gameState.fuel -= getRandomInt(3, 7);
+            
+            updateOutput(`You drive for ${distanceCovered} miles. ${gameState.distance} miles remaining to reach Boulder.`);
+            
+            // Random chance of location change
+            if (Math.random() < 0.6) {
+                gameState.currentLocation = getRandomElement(gameState.locations);
+                updateOutput(`You've reached a ${gameState.currentLocation} area.`);
+            }
+            
+            // Random chance of encountering zombies
+            if (Math.random() < 0.4) {
+                gameState.zombiesNearby = getRandomInt(1, 5);
+                updateOutput(`You've encountered ${gameState.zombiesNearby} zombies! They're approaching your vehicle.`);
+            }
+        }
+        
+        function lookAction() {
+            updateOutput(`You're in a ${gameState.currentLocation} area.`);
+            
+            if (gameState.zombiesNearby > 0) {
+                const zombieType = getRandomElement(gameState.zombieTypes);
+                updateOutput(`There are ${gameState.zombiesNearby} zombies nearby. You spot a ${zombieType} approaching.`);
+            } else {
+                updateOutput("The area seems clear of immediate threats.");
+            }
+            
+            // Random chance of spotting something interesting
+            if (Math.random() < 0.5) {
+                updateOutput(getRandomElement(gameState.events));
+            }
+        }
+        
+        function shootAction() {
+            if (gameState.zombiesNearby <= 0) {
+                updateOutput("There are no targets to shoot at.");
+                return;
+            }
+            
+            if (gameState.ammo <= 0) {
+                updateOutput("You're out of ammo! You need to find more or use another strategy.");
+                return;
+            }
+            
+            gameState.ammo--;
+            const killChance = Math.random();
+            
+            if (killChance > 0.3) {
+                const killed = getRandomInt(1, Math.min(3, gameState.zombiesNearby));
+                gameState.zombiesNearby = Math.max(0, gameState.zombiesNearby - killed);
+                updateOutput(`You fire your weapon and take down ${killed} zombie${killed > 1 ? 's' : ''}! ${gameState.zombiesNearby} remaining.`);
+            } else {
+                updateOutput("You fire but miss! The zombies are still coming.");
+            }
+            
+            // Chance of taking damage if zombies are still present
+            if (gameState.zombiesNearby > 0 && Math.random() < 0.4) {
+                const damage = getRandomInt(5, 15);
+                gameState.health -= damage;
+                updateOutput(`A zombie gets close and injures you! You take ${damage} damage.`);
+            }
+        }
+        
+        function searchAction() {
+            if (gameState.zombiesNearby > 0) {
+                updateOutput("It's too dangerous to search with zombies nearby!");
+                return;
+            }
+            
+            const findChance = Math.random();
+            
+            if (findChance < 0.7) {
+                const items = ["ammunition", "medicine", "fuel", "food", "spare parts"];
+                const foundItem = getRandomElement(items);
+                
+                switch(foundItem) {
+                    case "ammunition":
+                        const ammoFound = getRandomInt(3, 8);
+                        gameState.ammo += ammoFound;
+                        updateOutput(`You found ${ammoFound} rounds of ammunition!`);
+                        break;
+                    case "medicine":
+                        const healthRestored = getRandomInt(10, 25);
+                        gameState.health = Math.min(100, gameState.health + healthRestored);
+                        updateOutput(`You found medical supplies and restored ${healthRestored} health!`);
+                        break;
+                    case "fuel":
+                        const fuelFound = getRandomInt(10, 20);
+                        gameState.fuel += fuelFound;
+                        updateOutput(`You found ${fuelFound} units of fuel!`);
+                        break;
+                    case "food":
+                        const healthFromFood = getRandomInt(5, 15);
+                        gameState.health = Math.min(100, gameState.health + healthFromFood);
+                        updateOutput(`You found some food and restored ${healthFromFood} health!`);
+                        break;
+                    case "spare parts":
+                        gameState.inventory.push("spare parts");
+                        updateOutput("You found some spare parts! These will be useful for vehicle repairs.");
+                        break;
+                }
+            } else {
+                updateOutput("You search the area but find nothing useful.");
+            }
+            
+            // Chance of zombies appearing while searching
+            if (Math.random() < 0.3) {
+                gameState.zombiesNearby = getRandomInt(1, 4);
+                updateOutput(`While searching, you've attracted ${gameState.zombiesNearby} zombies!`);
+            }
+        }
+        
+        function repairAction() {
+            if (gameState.zombiesNearby > 0) {
+                updateOutput("You can't repair your vehicle with zombies nearby!");
+                return;
+            }
+            
+            if (gameState.vehicleHealth >= 95) {
+                updateOutput("Your vehicle is already in good condition.");
+                return;
+            }
+            
+            const hasTools = gameState.inventory.includes("basic tools") || gameState.inventory.includes("advanced tools");
+            const hasParts = gameState.inventory.includes("spare parts");
+            
+            if (!hasTools) {
+                updateOutput("You need tools to repair your vehicle.");
+                return;
+            }
+            
+            let repairAmount = getRandomInt(5, 15);
+            
+            if (hasParts) {
+                repairAmount += getRandomInt(10, 20);
+                const partsIndex = gameState.inventory.indexOf("spare parts");
+                gameState.inventory.splice(partsIndex, 1);
+                updateOutput("You use the spare parts to make better repairs.");
+            }
+            
+            gameState.vehicleHealth = Math.min(100, gameState.vehicleHealth + repairAmount);
+            updateOutput(`You repair your vehicle, improving its condition by ${repairAmount}%.`);
+        }
+        
+        function inventoryAction() {
+            updateOutput("INVENTORY:");
+            gameState.inventory.forEach(item => {
+                updateOutput(`- ${item}`);
+            });
+            updateOutput(`Fuel: ${gameState.fuel} units`);
+        }
+        
+        function helpAction() {
+            updateOutput("AVAILABLE COMMANDS:");
+            for (const [cmd, desc] of Object.entries(gameState.commands)) {
+                updateOutput(`- ${cmd}: ${desc}`);
+            }
+        }
+        
+        // Generate random events
+        function generateRandomEvent() {
+            const eventChance = Math.random();
+            
+            if (eventChance < 0.1) {
+                // Vehicle breakdown
+                const damageTaken = getRandomInt(5, 15);
+                gameState.vehicleHealth -= damageTaken;
+                updateOutput(`Your vehicle suddenly develops a problem! It takes ${damageTaken}% damage.`);
+            } else if (eventChance < 0.2) {
+                // Zombie ambush
+                if (gameState.zombiesNearby <= 0) {
+                    gameState.zombiesNearby = getRandomInt(2, 6);
+                    updateOutput(`A group of ${gameState.zombiesNearby} zombies appears suddenly!`);
+                }
+            } else if (eventChance < 0.25) {
+                // Find survivor
+                if (gameState.zombiesNearby <= 0) {
+                    updateOutput("You encounter another survivor. They give you some supplies before continuing on their way.");
+                    gameState.ammo += getRandomInt(2, 5);
+                    updateOutput(`They gave you some ammunition! (+${gameState.ammo} rounds)`);
+                }
+            }
+        }
+        
+        // Process input when Enter is pressed
+        inputElement.addEventListener("keydown", function(event) {
+            if (event.key === "Enter") {
+                const command = inputElement.value.trim();
+                if (command) {
+                    processCommand(command);
+                    inputElement.value = "";
+                }
+            }
+        });
+        
+        // Initial stats update
+        updateStats();
+    </script>
+</body>
+</html>
